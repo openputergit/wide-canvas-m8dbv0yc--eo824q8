@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextBehindImage</title>
+    <script src="https://unpkg.com/@tensorflow/tfjs"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+    <script src="https://unpkg.com/@tensorflow-models/body-pix@2.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --neo-shadow: 5px 5px 0px 0px #000000;
+        }
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #f0f0f0;
+        }
+        .neo-brutal {
+            border: 3px solid #000000;
+            box-shadow: var(--neo-shadow);
+            transition: all 0.2s ease;
+        }
+        .neo-brutal:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0px 0px #000000;
+        }
+        .canvas-container {
+            border: 3px solid #000000;
+            box-shadow: var(--neo-shadow);
+        }
+        #imageCanvas {
+            max-width: 100%;
+            height: auto;
+        }
+        .dark {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .drag-over {
+            background-color: #e2e2e2;
+            border-style: dashed !important;
+        }
+    </style>
+</head>
+<body class="p-4 transition-colors duration-300">
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-4xl font-bold neo-brutal p-4 bg-yellow-300">TextBehindImage</h1>
+            <button id="themeToggle" class="neo-brutal p-4 bg-white">
+                <i class="bi bi-moon-fill"></i>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="space-y-4">
+                <div id="dropZone" class="neo-brutal p-8 bg-white text-center min-h-[300px] flex flex-col items-center justify-center">
+                    <i class="bi bi-cloud-upload text-4xl mb-4"></i>
+                    <p>Drag & Drop Image or</p>
+                    <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                    <button onclick="document.getElementById('imageUpload').click()" class="neo-brutal mt-4 px-6 py-2 bg-blue-300">
+                        Choose File
+                    </button>
+                </div>
+
+                <div class="neo-brutal p-4 bg-white">
+                    <textarea id="textInput" class="w-full p-2 border-2 border-black" rows="4" placeholder="Enter your text here"></textarea>
+                </div>
+
+                <div class="neo-brutal p-4 bg-white space-y-4">
+                    <h3 class="font-bold">Customization</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label>Font Family</label>
+                            <select id="fontFamily" class="w-full border-2 border-black p-2">
+                                <option value="Arial">Arial</option>
+                                <option value="Times New Roman">Times New Roman</option>
+                                <option value="Space Grotesk">Space Grotesk</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Font Size</label>
+                            <input type="range" id="fontSize" min="12" max="72" value="24" class="w-full">
+                        </div>
+                        <div>
+                            <label>Color</label>
+                            <input type="color" id="textColor" class="w-full h-10 border-2 border-black">
+                        </div>
+                        <div>
+                            <label>Opacity</label>
+                            <input type="range" id="opacity" min="0" max="100" value="100" class="w-full">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="neo-brutal p-4 bg-white">
+                    <div id="canvasContainer" class="relative">
+                        <canvas id="imageCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <button id="downloadBtn" class="neo-brutal px-6 py-3 bg-green-300 flex-1">
+                        <i class="bi bi-download me-2"></i> Download
+                    </button>
+                    <button id="resetBtn" class="neo-brutal px-6 py-3 bg-red-300 flex-1">
+                        <i class="bi bi-arrow-counterclockwise me-2"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = new fabric.Canvas('imageCanvas', {
+            width: 800,
+            height: 600
+        });
+        let isDark = false;
+
+        // Theme Toggle
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            isDark = !isDark;
+            document.body.classList.toggle('dark');
+            document.getElementById('themeToggle').innerHTML = isDark ? 
+                '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-fill"></i>';
+        });
+
+        // Drag and Drop
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('drag-over');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('drag-over');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        // File Upload
+        document.getElementById('imageUpload').addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        fabric.Image.fromURL(e.target.result, img => {
+                            canvas.clear();
+                            const scale = Math.min(
+                                canvas.width / img.width,
+                                canvas.height / img.height
+                            );
+                            img.scale(scale);
+                            canvas.add(img);
+                            canvas.renderAll();
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+
+        // Text Input
+        document.getElementById('textInput').addEventListener('input', updateText);
+        let textObject = null;
+
+        function updateText() {
+            const text = document.getElementById('textInput').value;
+            if (textObject) {
+                canvas.remove(textObject);
+            }
+            textObject = new fabric.Text(text, {
+                left: 50,
+                top: 50,
+                fontFamily: document.getElementById('fontFamily').value,
+                fontSize: document.getElementById('fontSize').value,
+                fill: document.getElementById('textColor').value,
+                opacity: document.getElementById('opacity').value / 100
+            });
+            canvas.add(textObject);
+            canvas.renderAll();
+        }
+
+        // Customization Controls
+        ['fontFamily', 'fontSize', 'textColor', 'opacity'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateText);
+        });
+
+        // Download
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const dataURL = canvas.toDataURL({
+                format: 'png',
+                quality: 1
+            });
+            const link = document.createElement('a');
+            link.download = 'textbehindimage.png';
+            link.href = dataURL;
+            link.click();
+        });
+
+        // Reset
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            canvas.clear();
+            document.getElementById('textInput').value = '';
+            document.getElementById('fontSize').value = 24;
+            document.getElementById('opacity').value = 100;
+            document.getElementById('textColor').value = '#000000';
+            document.getElementById('fontFamily').value = 'Arial';
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
